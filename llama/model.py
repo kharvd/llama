@@ -213,7 +213,7 @@ class FeedForward(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, layer_id: int, args: ModelArgs):
+    def __init__(self, layer_id: int, args: ModelArgs, hook):
         super().__init__()
         self.n_heads = args.n_heads
         self.dim = args.dim
@@ -228,6 +228,7 @@ class TransformerBlock(nn.Module):
         self.layer_id = layer_id
         self.attention_norm = RMSNorm(args.dim, eps=args.norm_eps)
         self.ffn_norm = RMSNorm(args.dim, eps=args.norm_eps)
+        self.hook = hook
 
     def forward(
         self,
@@ -236,15 +237,24 @@ class TransformerBlock(nn.Module):
         freqs_cis: torch.Tensor,
         mask: Optional[torch.Tensor],
     ):
-        h = x + self.attention.forward(
+        attn = self.attention.forward(
             self.attention_norm(x), start_pos, freqs_cis, mask
         )
-        out = h + self.feed_forward.forward(self.ffn_norm(h))
+        attn = self.hook.post(self.layer_id, "attn", attn)
+
+        h = x + attn
+        ff = self.feed_forward.forward(self.ffn_norm(h))
+
+        ff = self.hook.post(self.layer_id, "ffn", ff)
+
+        out = h + ff
+
+        out = self.hook.post(self.layer_id, "resid", out)
         return out
 
 
 class Transformer(nn.Module):
-    def __init__(self, params: ModelArgs):
+    def __init__(self, params: ModelArgs, hook):
         super().__init__()
         self.params = params
         self.vocab_size = params.vocab_size
@@ -256,7 +266,7 @@ class Transformer(nn.Module):
 
         self.layers = torch.nn.ModuleList()
         for layer_id in range(params.n_layers):
-            self.layers.append(TransformerBlock(layer_id, params))
+            self.layers.append(TransformerBlock(layer_id, params, hook))
 
         self.norm = RMSNorm(params.dim, eps=params.norm_eps)
         self.output = ColumnParallelLinear(

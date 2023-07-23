@@ -56,9 +56,12 @@ class Llama:
         max_seq_len: int,
         max_batch_size: int,
         model_parallel_size: Optional[int] = None,
+        hook=None,
     ) -> "Llama":
         if not torch.distributed.is_initialized():
-            torch.distributed.init_process_group("nccl")
+            torch.distributed.init_process_group(
+                "nccl", init_method="tcp://127.0.0.1:23456", rank=0, world_size=1
+            )
         if not model_parallel_is_initialized():
             if model_parallel_size is None:
                 model_parallel_size = int(os.environ.get("WORLD_SIZE", 1))
@@ -92,7 +95,7 @@ class Llama:
         tokenizer = Tokenizer(model_path=tokenizer_path)
         model_args.vocab_size = tokenizer.n_words
         torch.set_default_tensor_type(torch.cuda.HalfTensor)
-        model = Transformer(model_args)
+        model = Transformer(model_args, hook)
         model.load_state_dict(checkpoint, strict=False)
         print(f"Loaded in {time.time() - start_time:.2f} seconds")
 
