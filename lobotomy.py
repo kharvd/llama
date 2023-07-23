@@ -55,6 +55,20 @@ def main(
         ],
     ]
 
+    # mask = (torch.rand((1, 1, 4096)) > 0.6).cuda()
+
+    # def should_transform(layer_id, layer_name):
+    #     # return layer_name in ["attn", "ffn"] and layer_id == 2
+    #     return layer_name in ["attn", "ffn"] and layer_id % 2 == 1
+    #     # return False
+
+    # def transform(layer_id, layer_name, x):
+    #     return x * mask
+    #     # return torch.zeros_like(x)
+
+    # hook.should_transform = should_transform
+    # hook.transform = transform
+
     all_results = []
     for lid in range(-1, generator.model.params.n_layers):
         hook.should_transform = lambda layer_id, layer_name: (layer_id == lid) and (
@@ -72,7 +86,7 @@ def main(
 
         all_results.append(results)
 
-        print(f"-------- Layer {lid} results:\n ---------")
+        print(f"-------- Layer {lid} results: ---------")
 
         for dialog, result in zip(dialogs, results):
             for msg in dialog:
