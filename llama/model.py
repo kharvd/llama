@@ -180,7 +180,7 @@ class Attention(nn.Module):
         if mask is not None:
             scores = scores + mask  # (bs, n_local_heads, seqlen, cache_len + seqlen)
         scores = F.softmax(scores.float(), dim=-1).type_as(xq)
-        self.hook.post(self.layer_id, "attn_scores", scores)
+        scores = self.hook.post(self.layer_id, "attn_scores", scores)
         output = torch.matmul(scores, values)  # (bs, n_local_heads, seqlen, head_dim)
         output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
         return self.wo(output)
@@ -246,13 +246,15 @@ class TransformerBlock(nn.Module):
         attn = self.hook.post(self.layer_id, "attn", attn)
 
         h = x + attn
+        h = self.hook.post(self.layer_id, "resid_mid", h)
+        
         ff = self.feed_forward.forward(self.ffn_norm(h))
 
         ff = self.hook.post(self.layer_id, "ffn", ff)
 
         out = h + ff
 
-        out = self.hook.post(self.layer_id, "resid", out)
+        out = self.hook.post(self.layer_id, "resid_out", out)
         return out
 
 
